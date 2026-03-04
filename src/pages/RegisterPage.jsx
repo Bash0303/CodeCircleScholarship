@@ -6,6 +6,7 @@ import * as yup from 'yup'
 import toast from 'react-hot-toast'
 import Header from '../components/common/Header'
 import Footer from '../components/common/Footer'
+import api from '../utils/axios'
 import { Eye, EyeOff, Check, User, Mail, Phone, MapPin, Lock, ArrowLeft, Shield } from 'lucide-react'
 import { COURSES } from '../data/courses'
 import { NIGERIAN_STATES } from '../data/states'
@@ -50,38 +51,36 @@ const RegisterPage = () => {
     setIsSubmitting(true)
     
     try {
-      // Call your backend API
-      const response = await fetch('http://localhost:5000/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data)
-      })
+      // Call your backend API using axios
+      const response = await api.post('/auth/register', data)
+      
+      // Log the full response for debugging (optional)
+      console.log('Registration response:', response)
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Registration failed')
-      }
+      const result = response.data
 
       if (result.success) {
         toast.success(result.message || 'Registration successful!')
         
         // Store token if your API returns one
         if (result.token) {
-          localStorage.setItem('token', result.token)
-          localStorage.setItem('user', JSON.stringify(result.user))
+          localStorage.setItem('codecircle_token', result.token)
+          localStorage.setItem('codecircle_user', JSON.stringify(result.user))
         }
         
-        // Navigate to success page with WhatsApp link
+        // Navigate to registration success page
         navigate('/registration-success')
       } else {
         throw new Error(result.message || 'Registration failed')
       }
     } catch (error) {
       console.error('Registration error:', error)
-      toast.error(error.message || 'Registration failed. Please try again.')
+      
+      // Better error handling with axios
+      const errorMessage = error.response?.data?.message || 
+                          error.message || 
+                          'Registration failed. Please try again.'
+      toast.error(errorMessage)
     } finally {
       setIsSubmitting(false)
     }

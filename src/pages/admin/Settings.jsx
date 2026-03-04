@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import api from '../../utils/axios'
 import { 
   Settings as SettingsIcon, Shield, Bell, Mail, 
   Clock, Users, Calendar, Save, Key, Lock,
@@ -83,29 +84,17 @@ const AdminSettings = () => {
   const fetchSettings = async () => {
     setLoading(true)
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch('http://localhost:5000/api/admin/settings', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await api.get('/admin/settings')
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch settings')
-      }
-
-      if (result.success) {
-        setSettings(result.settings)
-        if (result.settings.metadata) {
-          setMetadata(result.settings.metadata)
+      if (response.data.success) {
+        setSettings(response.data.settings)
+        if (response.data.settings.metadata) {
+          setMetadata(response.data.settings.metadata)
         }
       }
     } catch (error) {
       console.error('Error fetching settings:', error)
-      toast.error(error.message || 'Failed to load settings')
+      toast.error(error.response?.data?.message || 'Failed to load settings')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -115,22 +104,10 @@ const AdminSettings = () => {
   // Fetch settings history
   const fetchSettingsHistory = async () => {
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch('http://localhost:5000/api/admin/settings/history', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await api.get('/admin/settings/history')
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch history')
-      }
-
-      if (result.success) {
-        setSettingsHistory(result.history || [])
+      if (response.data.success) {
+        setSettingsHistory(response.data.history || [])
       }
     } catch (error) {
       console.error('Error fetching history:', error)
@@ -141,33 +118,19 @@ const AdminSettings = () => {
   const handleSaveSettings = async () => {
     setSaving(true)
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch('http://localhost:5000/api/admin/settings', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(settings)
-      })
+      const response = await api.put('/admin/settings', settings)
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to save settings')
-      }
-
-      if (result.success) {
-        setSettings(result.settings)
-        if (result.settings.metadata) {
-          setMetadata(result.settings.metadata)
+      if (response.data.success) {
+        setSettings(response.data.settings)
+        if (response.data.settings.metadata) {
+          setMetadata(response.data.settings.metadata)
         }
-        toast.success(result.message || 'Settings saved successfully!')
-        fetchSettingsHistory() // Refresh history
+        toast.success(response.data.message || 'Settings saved successfully!')
+        fetchSettingsHistory()
       }
     } catch (error) {
       console.error('Error saving settings:', error)
-      toast.error(error.message || 'Failed to save settings')
+      toast.error(error.response?.data?.message || 'Failed to save settings')
     } finally {
       setSaving(false)
     }
@@ -177,33 +140,19 @@ const AdminSettings = () => {
   const saveSection = async (section) => {
     setSaving(true)
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(`http://localhost:5000/api/admin/settings/${section}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(settings[section])
-      })
+      const response = await api.put(`/admin/settings/${section}`, settings[section])
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || `Failed to save ${section} settings`)
-      }
-
-      if (result.success) {
+      if (response.data.success) {
         setSettings(prev => ({
           ...prev,
-          [section]: result.section
+          [section]: response.data.section
         }))
-        toast.success(result.message || `${section} settings saved successfully!`)
-        fetchSettingsHistory() // Refresh history
+        toast.success(response.data.message || `${section} settings saved successfully!`)
+        fetchSettingsHistory()
       }
     } catch (error) {
       console.error(`Error saving ${section} settings:`, error)
-      toast.error(error.message || `Failed to save ${section} settings`)
+      toast.error(error.response?.data?.message || `Failed to save ${section} settings`)
     } finally {
       setSaving(false)
     }
@@ -217,32 +166,19 @@ const AdminSettings = () => {
 
     setSaving(true)
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch('http://localhost:5000/api/admin/settings/reset', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+      const response = await api.post('/admin/settings/reset')
+
+      if (response.data.success) {
+        setSettings(response.data.settings)
+        if (response.data.settings.metadata) {
+          setMetadata(response.data.settings.metadata)
         }
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to reset settings')
-      }
-
-      if (result.success) {
-        setSettings(result.settings)
-        if (result.settings.metadata) {
-          setMetadata(result.settings.metadata)
-        }
-        toast.success(result.message || 'Settings reset to default successfully!')
-        fetchSettingsHistory() // Refresh history
+        toast.success(response.data.message || 'Settings reset to default successfully!')
+        fetchSettingsHistory()
       }
     } catch (error) {
       console.error('Error resetting settings:', error)
-      toast.error(error.message || 'Failed to reset settings')
+      toast.error(error.response?.data?.message || 'Failed to reset settings')
     } finally {
       setSaving(false)
     }
@@ -251,27 +187,14 @@ const AdminSettings = () => {
   // Test email configuration
   const handleTestEmail = async () => {
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch('http://localhost:5000/api/admin/settings/test-email', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await api.post('/admin/settings/test-email')
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to send test email')
-      }
-
-      if (result.success) {
-        toast.success(result.message || 'Test email sent successfully!')
+      if (response.data.success) {
+        toast.success(response.data.message || 'Test email sent successfully!')
       }
     } catch (error) {
       console.error('Error sending test email:', error)
-      toast.error(error.message || 'Failed to send test email')
+      toast.error(error.response?.data?.message || 'Failed to send test email')
     }
   }
 

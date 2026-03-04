@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import api from '../../utils/axios'  // Add this import
 import { 
   Award, Search, Download, Filter, CheckCircle,
   XCircle, Clock, TrendingUp, TrendingDown,
@@ -42,26 +43,13 @@ const AdminResults = () => {
   const fetchResults = async () => {
     setLoading(true)
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(
-        `http://localhost:5000/api/admin/results?page=${currentPage}&limit=10&filter=${filterScore}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
+      const response = await api.get(
+        `/admin/results?page=${currentPage}&limit=10&filter=${filterScore}`
       )
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch results')
-      }
-
-      if (result.success) {
+      if (response.data.success) {
         // Map the API response to match your component's expected format
-        const mappedResults = result.results.map(r => ({
+        const mappedResults = response.data.results.map(r => ({
           id: r.id,
           name: r.name,
           email: r.email,
@@ -77,12 +65,12 @@ const AdminResults = () => {
         }))
 
         setResults(mappedResults)
-        setPagination(result.pagination)
-        setStats(result.stats)
+        setPagination(response.data.pagination)
+        setStats(response.data.stats)
       }
     } catch (error) {
       console.error('Error fetching results:', error)
-      toast.error(error.message || 'Failed to load results')
+      toast.error(error.response?.data?.message || 'Failed to load results')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -92,23 +80,11 @@ const AdminResults = () => {
   // Fetch stats from API
   const fetchStats = async () => {
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch('http://localhost:5000/api/admin/results/stats', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await api.get('/admin/results/stats')
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch stats')
-      }
-
-      if (result.success) {
-        setStats(result.stats)
-        setRecentActivity(result.recentActivity || [])
+      if (response.data.success) {
+        setStats(response.data.stats)
+        setRecentActivity(response.data.recentActivity || [])
       }
     } catch (error) {
       console.error('Error fetching stats:', error)
@@ -118,26 +94,14 @@ const AdminResults = () => {
   // Fetch single result details
   const fetchResultDetails = async (resultId) => {
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(`http://localhost:5000/api/admin/results/${resultId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await api.get(`/admin/results/${resultId}`)
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch result details')
-      }
-
-      if (result.success) {
-        return result.result
+      if (response.data.success) {
+        return response.data.result
       }
     } catch (error) {
       console.error('Error fetching result details:', error)
-      toast.error(error.message || 'Failed to load result details')
+      toast.error(error.response?.data?.message || 'Failed to load result details')
     }
     return null
   }
@@ -145,26 +109,14 @@ const AdminResults = () => {
   // Fetch candidate results
   const fetchCandidateResults = async (candidateId) => {
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(`http://localhost:5000/api/admin/results/candidate/${candidateId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await api.get(`/admin/results/candidate/${candidateId}`)
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch candidate results')
-      }
-
-      if (result.success) {
-        return result.results
+      if (response.data.success) {
+        return response.data.results
       }
     } catch (error) {
       console.error('Error fetching candidate results:', error)
-      toast.error(error.message || 'Failed to load candidate results')
+      toast.error(error.response?.data?.message || 'Failed to load candidate results')
     }
     return []
   }
@@ -172,22 +124,9 @@ const AdminResults = () => {
   // Handle approve result
   const handleApproveResult = async (candidate) => {
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(`http://localhost:5000/api/admin/results/${candidate.id}/approve`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await api.post(`/admin/results/${candidate.id}/approve`)
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to approve result')
-      }
-
-      if (result.success) {
+      if (response.data.success) {
         // Update the result in the list
         setResults(prev => prev.map(r => {
           if (r.id === candidate.id) {
@@ -196,63 +135,40 @@ const AdminResults = () => {
           return r
         }))
         
-        toast.success(result.message || `Result approved for ${candidate.name}`)
+        toast.success(response.data.message || `Result approved for ${candidate.name}`)
         fetchStats() // Refresh stats
       }
     } catch (error) {
       console.error('Error approving result:', error)
-      toast.error(error.message || 'Failed to approve result')
+      toast.error(error.response?.data?.message || 'Failed to approve result')
     }
   }
 
   // Handle send message
   const handleSendMessage = async (candidate, message) => {
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(`http://localhost:5000/api/admin/candidates/${candidate.id}/send-message`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ message })
-      })
+      const response = await api.post(`/admin/candidates/${candidate.id}/send-message`, { message })
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to send message')
-      }
-
-      if (result.success) {
-        toast.success(result.message || `Result notification sent to ${candidate.name}`)
+      if (response.data.success) {
+        toast.success(response.data.message || `Result notification sent to ${candidate.name}`)
       }
     } catch (error) {
       console.error('Error sending message:', error)
-      toast.error(error.message || 'Failed to send message')
+      toast.error(error.response?.data?.message || 'Failed to send message')
     }
   }
 
   // Export to CSV/Excel
   const exportToCSV = async () => {
     try {
-     const token = localStorage.getItem('codecircle_token')
-      const format = 'csv' // or 'excel'
-      const response = await fetch(`http://localhost:5000/api/admin/results/export?format=${format}&filter=${filterScore}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const format = 'csv'
+      // Using axios with blob response type
+      const response = await api.get(`/admin/results/export?format=${format}&filter=${filterScore}`, {
+        responseType: 'blob'
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to export results')
-      }
-
-      // Get the blob from response
-      const blob = await response.blob()
-      
       // Create download link
-      const url = window.URL.createObjectURL(blob)
+      const url = window.URL.createObjectURL(new Blob([response.data]))
       const a = document.createElement('a')
       a.href = url
       a.download = `test_results_${new Date().toISOString().split('T')[0]}.${format}`
@@ -292,7 +208,6 @@ const AdminResults = () => {
     const details = await fetchResultDetails(result.id)
     if (details) {
       // Navigate to result details page or show modal
-      // For now, show details in console
       console.log('Result details:', details)
       toast.success(`Viewing details for ${result.name}`)
     }

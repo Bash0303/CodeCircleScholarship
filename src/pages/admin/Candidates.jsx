@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import api from '../../utils/axios'
 import { useAuth } from '../../context/AuthContext'
 import { 
   Users, Search, Download, Filter, Calendar,
@@ -37,31 +38,16 @@ const AdminCandidates = () => {
   })
   const [availableCourses, setAvailableCourses] = useState([])
 
-  // Fetch candidates from API
+  // Fetch candidates
   const fetchCandidates = async () => {
     setLoading(true)
     try {
-      const token = localStorage.getItem('codecircle_token')
-      
-      const response = await fetch(
-        `http://localhost:5000/api/admin/candidates?page=${currentPage}&limit=10&status=${filterStatus}&course=${filterCourse}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
+      const response = await api.get(
+        `/admin/candidates?page=${currentPage}&limit=10&status=${filterStatus}&course=${filterCourse}`
       )
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch candidates')
-      }
-
-      if (result.success) {
-        // Map the API response to match your component's expected format
-        const mappedCandidates = result.candidates.map(candidate => ({
+      if (response.data.success) {
+        const mappedCandidates = response.data.candidates.map(candidate => ({
           id: candidate.id,
           name: candidate.name,
           email: candidate.email,
@@ -71,27 +57,25 @@ const AdminCandidates = () => {
           gender: candidate.gender,
           course: candidate.course,
           registeredDate: candidate.registeredDate,
-          // IMPORTANT FIX: Ensure these are proper boolean values
           testScheduled: candidate.testScheduled === true,
           testDate: candidate.testDate ? new Date(candidate.testDate).toLocaleDateString('en-CA') : null,
           testTime: candidate.testTime,
           hasTakenTest: candidate.hasTakenTest === true,
           testScore: candidate.testScore,
-          // Determine status based on candidate data
           status: candidate.approved ? 'approved' : 
                   candidate.hasTakenTest ? (candidate.testScore >= 80 ? 'passed' : 'failed') :
                   candidate.testScheduled ? 'scheduled' : 'pending',
           approved: candidate.approved === true,
-          passed: candidate.passed === true // Add passed field
+          passed: candidate.passed === true
         }))
 
         setCandidates(mappedCandidates)
-        setPagination(result.pagination)
-        setAvailableCourses(result.filters?.courses || [])
+        setPagination(response.data.pagination)
+        setAvailableCourses(response.data.filters?.courses || [])
       }
     } catch (error) {
       console.error('Error fetching candidates:', error)
-      toast.error(error.message || 'Failed to load candidates')
+      toast.error(error.response?.data?.message || 'Failed to load candidates')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -101,235 +85,139 @@ const AdminCandidates = () => {
   // Fetch single candidate details
   const fetchCandidateDetails = async (candidateId) => {
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(`http://localhost:5000/api/admin/candidates/${candidateId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch candidate details')
-      }
-
-      if (result.success) {
-        return result.candidate
+      const response = await api.get(`/admin/candidates/${candidateId}`)
+      if (response.data.success) {
+        return response.data.candidate
       }
     } catch (error) {
       console.error('Error fetching candidate details:', error)
-      toast.error(error.message || 'Failed to load candidate details')
+      toast.error(error.response?.data?.message || 'Failed to load candidate details')
     }
     return null
   }
 
-  // Handle schedule test for single candidate
+  // Handle schedule test
   const handleUploadTest = async (candidate, testDate, testTime) => {
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(`http://localhost:5000/api/admin/candidates/${candidate.id}/schedule-test`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ testDate, testTime })
+      const response = await api.post(`/admin/candidates/${candidate.id}/schedule-test`, {
+        testDate,
+        testTime
       })
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to schedule test')
-      }
-
-      if (result.success) {
-        // Update the candidate in the list
-        setCandidates(prev => prev.map(c => {
-          if (c.id === candidate.id) {
-            return {
-              ...c,
-              testScheduled: true,
-              testDate: testDate,
-              testTime: testTime,
-              status: 'scheduled'
-            }
-          }
-          return c
-        }))
-        
-        toast.success(result.message || `Test scheduled for ${candidate.name}`)
+      if (response.data.success) {
+        setCandidates(prev => prev.map(c => 
+          c.id === candidate.id 
+            ? { ...c, testScheduled: true, testDate, testTime, status: 'scheduled' }
+            : c
+        ))
+        toast.success(response.data.message || `Test scheduled for ${candidate.name}`)
+        setShowUploadModal(false)
+        setSelectedCandidate(null)
       }
     } catch (error) {
       console.error('Error scheduling test:', error)
-      toast.error(error.message || 'Failed to schedule test')
+      toast.error(error.response?.data?.message || 'Failed to schedule test')
     }
   }
 
   // Handle reschedule test
   const handleRescheduleTest = async (candidate, testDate, testTime, reason) => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem('codecircle_token');
+      setLoading(true)
       
-      console.log('Rescheduling:', { candidate: candidate.id, testDate, testTime, reason });
-      
-      const response = await fetch(`http://localhost:5000/api/admin/candidates/${candidate.id}/reschedule-test`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-          testDate, 
-          testTime, 
-          reason 
-        })
-      });
+      const response = await api.put(`/admin/candidates/${candidate.id}/reschedule-test`, {
+        testDate,
+        testTime,
+        reason
+      })
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to reschedule test');
-      }
-
-      if (result.success) {
-        // Update the candidate in the list with ALL reset fields
-        setCandidates(prev => prev.map(c => {
-          if (c.id === candidate.id) {
-            return {
-              ...c,
-              testScheduled: true,
-              hasTakenTest: false,           // Reset this
-              testScore: null,                // Reset score
-              approved: false,                 // Reset approval
-              passed: false,                   // Reset passed
-              testDate: testDate,
-              testTime: testTime,
-              status: 'scheduled'
-            };
-          }
-          return c;
-        }));
+      if (response.data.success) {
+        setCandidates(prev => prev.map(c => 
+          c.id === candidate.id 
+            ? { 
+                ...c, 
+                testScheduled: true,
+                hasTakenTest: false,
+                testScore: null,
+                approved: false,
+                passed: false,
+                testDate,
+                testTime,
+                status: 'scheduled'
+              }
+            : c
+        ))
         
-        setShowRescheduleModal(false);
-        setSelectedCandidate(null);
-        toast.success(`Test rescheduled for ${candidate.name}`);
-        
-        // Refresh the candidates list to ensure everything is in sync
-        fetchCandidates();
+        setShowRescheduleModal(false)
+        setSelectedCandidate(null)
+        toast.success(`Test rescheduled for ${candidate.name}`)
+        fetchCandidates()
       }
     } catch (error) {
-      console.error('Error rescheduling test:', error);
-      toast.error(error.message || 'Failed to reschedule test');
+      console.error('Error rescheduling test:', error)
+      toast.error(error.response?.data?.message || 'Failed to reschedule test')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   // Handle bulk schedule
   const handleBulkSchedule = async (candidateIds, testDate, testTime) => {
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(`http://localhost:5000/api/admin/candidates/bulk-schedule`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ candidateIds, testDate, testTime })
+      const response = await api.post('/admin/candidates/bulk-schedule', {
+        candidateIds,
+        testDate,
+        testTime
       })
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to schedule tests')
-      }
-
-      if (result.success) {
-        // Refresh the list to get updated data
+      if (response.data.success) {
         fetchCandidates()
         
-        if (result.results.success.length > 0) {
-          toast.success(`Successfully scheduled tests for ${result.results.success.length} candidates`)
+        if (response.data.results.success.length > 0) {
+          toast.success(`Successfully scheduled tests for ${response.data.results.success.length} candidates`)
         }
-        if (result.results.failed.length > 0) {
-          toast.error(`Failed to schedule for ${result.results.failed.length} candidates`)
+        if (response.data.results.failed.length > 0) {
+          toast.error(`Failed to schedule for ${response.data.results.failed.length} candidates`)
         }
       }
     } catch (error) {
       console.error('Error bulk scheduling:', error)
-      toast.error(error.message || 'Failed to schedule tests')
+      toast.error(error.response?.data?.message || 'Failed to schedule tests')
     }
   }
 
   // Handle approve score
   const handleApproveScore = async (candidate) => {
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(`http://localhost:5000/api/admin/candidates/${candidate.id}/approve`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await api.post(`/admin/candidates/${candidate.id}/approve`)
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to approve score')
-      }
-
-      if (result.success) {
-        // Update the candidate status
-        setCandidates(prev => prev.map(c => {
-          if (c.id === candidate.id) {
-            return {
-              ...c,
-              approved: true,
-              status: 'approved'
-            }
-          }
-          return c
-        }))
-        
-        toast.success(result.message || `Score approved for ${candidate.name}`)
-      } else {
-        toast.error(result.message || 'Cannot approve candidate')
+      if (response.data.success) {
+        setCandidates(prev => prev.map(c => 
+          c.id === candidate.id 
+            ? { ...c, approved: true, status: 'approved' }
+            : c
+        ))
+        toast.success(response.data.message || `Score approved for ${candidate.name}`)
       }
     } catch (error) {
       console.error('Error approving score:', error)
-      toast.error(error.message || 'Failed to approve score')
+      toast.error(error.response?.data?.message || 'Failed to approve score')
     }
   }
 
   // Handle send message
   const handleSendMessage = async (candidate, message) => {
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(`http://localhost:5000/api/admin/candidates/${candidate.id}/send-message`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ message })
-      })
+      const response = await api.post(`/admin/candidates/${candidate.id}/send-message`, { message })
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to send message')
-      }
-
-      if (result.success) {
-        toast.success(result.message || `Message sent to ${candidate.name}`)
+      if (response.data.success) {
+        toast.success(response.data.message || `Message sent to ${candidate.name}`)
+        setShowMessageModal(false)
+        setSelectedCandidate(null)
       }
     } catch (error) {
       console.error('Error sending message:', error)
-      toast.error(error.message || 'Failed to send message')
+      toast.error(error.response?.data?.message || 'Failed to send message')
     }
   }
 
@@ -371,7 +259,6 @@ const AdminCandidates = () => {
   const handleViewDetails = async (candidate) => {
     const details = await fetchCandidateDetails(candidate.id)
     if (details) {
-      // Navigate to candidate details page or show modal
       navigate(`/admin/candidates/${candidate.id}`, { state: { candidate: details } })
     }
   }

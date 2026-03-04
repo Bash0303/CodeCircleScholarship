@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import api from '../../utils/axios'  // Import api (only once)
 import { 
   Users, Calendar, CheckCircle, XCircle, Award,
   TrendingUp, Clock, Mail, Phone, MapPin,
@@ -20,7 +21,6 @@ import {
   ArcElement
 } from 'chart.js'
 import { Line, Pie } from 'react-chartjs-2'
-import api from '../../utils/axios'
 
 ChartJS.register(
   CategoryScale,
@@ -86,10 +86,12 @@ const AdminDashboard = () => {
       
       if (response.data.success) {
         setDashboardData(response.data)
+      } else {
+        toast.error('Failed to load dashboard data')
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
-      toast.error('Failed to load dashboard data')
+      toast.error(error.response?.data?.message || 'Failed to load dashboard data')
     } finally {
       setLoading(false)
     }
@@ -103,11 +105,14 @@ const AdminDashboard = () => {
       
       if (response.data.success) {
         // Update dashboard with filtered data
-        toast.success(`Showing data for ${range}`)
+        toast.success(`Showing data for ${range === '7days' ? 'last 7 days' : range === '30days' ? 'last 30 days' : 'last 90 days'}`)
+        
+        // You might want to update specific parts of dashboardData here
+        // based on the filtered response
       }
     } catch (error) {
       console.error('Error filtering dashboard:', error)
-      toast.error('Failed to filter data')
+      toast.error(error.response?.data?.message || 'Failed to filter data')
     } finally {
       setLoading(false)
     }
@@ -116,6 +121,8 @@ const AdminDashboard = () => {
   const handleExportReport = async (format = 'json') => {
     try {
       setExportLoading(true)
+      
+      // For file downloads, we need to handle the response differently
       const response = await api.get(`/admin/dashboard/export?format=${format}`, {
         responseType: format === 'csv' ? 'blob' : 'json'
       })
@@ -129,10 +136,12 @@ const AdminDashboard = () => {
         document.body.appendChild(link)
         link.click()
         link.remove()
+        window.URL.revokeObjectURL(url)
         toast.success('Report downloaded successfully')
       } else {
-        // Show JSON preview or trigger download
-        const dataStr = JSON.stringify(response.data.report, null, 2)
+        // For JSON, check if response.data has report property
+        const reportData = response.data.report || response.data
+        const dataStr = JSON.stringify(reportData, null, 2)
         const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr)
         const exportFileDefaultName = `dashboard-report-${new Date().toISOString().split('T')[0]}.json`
         
@@ -144,7 +153,7 @@ const AdminDashboard = () => {
       }
     } catch (error) {
       console.error('Error exporting report:', error)
-      toast.error('Failed to export report')
+      toast.error(error.response?.data?.message || 'Failed to export report')
     } finally {
       setExportLoading(false)
     }
@@ -424,7 +433,7 @@ const AdminDashboard = () => {
             </button>
 
             <button 
-              onClick={() => navigate('/admin/notifications')}
+              onClick={() => navigate('/admin/settings')}
               className="w-full flex items-center p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl hover:shadow-md transition-shadow"
             >
               <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">

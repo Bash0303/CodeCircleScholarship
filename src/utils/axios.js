@@ -1,45 +1,59 @@
 import axios from 'axios';
 
-// For Vite, use import.meta.env instead of process.env
+// Get the API URL from environment or use default
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+console.log('🔧 Axios initialized with API_URL:', API_URL);
 
 // Create axios instance
 const api = axios.create({
   baseURL: API_URL,
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+  },
+  timeout: 10000, // Add timeout to prevent hanging
 });
 
 // Request interceptor to add token
 api.interceptors.request.use(
   (config) => {
-    // FIXED: Use 'codecircle_token' instead of 'token'
     const token = localStorage.getItem('codecircle_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log('✅ Token attached to:', config.url);
-    } else {
-      console.log('❌ No token found for:', config.url);
+      console.log('✅ Token attached to request:', config.url);
     }
     return config;
   },
   (error) => {
+    console.error('❌ Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
 // Response interceptor to handle errors
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('✅ Response received:', response.config.url, response.status);
+    return response;
+  },
   (error) => {
+    console.error('❌ Response error:', error.config?.url, error.message);
+    
+    // Handle 401 errors
     if (error.response?.status === 401) {
-      console.log('🔒 401 Unauthorized - Token might be invalid');
-      // Unauthorized - clear token and redirect to login
+      console.log('🔒 401 Unauthorized - clearing storage');
       localStorage.removeItem('codecircle_token');
       localStorage.removeItem('codecircle_user');
-      window.location.href = '/admin/login';
+      
+      // Redirect to appropriate login page
+      const path = window.location.pathname;
+      if (path.includes('/admin')) {
+        window.location.href = '/admin/login';
+      } else {
+        window.location.href = '/login';
+      }
     }
+    
     return Promise.reject(error);
   }
 );

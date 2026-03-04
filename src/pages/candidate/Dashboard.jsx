@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import api from '../../utils/axios'
 import { useAuth } from '../../context/AuthContext'
 import { 
   Clock, AlertCircle, CheckCircle, Calendar, 
@@ -16,44 +17,28 @@ const CandidateDashboard = () => {
   const [isStartingTest, setIsStartingTest] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Helper function to get token from localStorage
-  const getToken = () => localStorage.getItem('codecircle_token')
-
   // Function to refresh user data from server
   const refreshUserData = async () => {
     try {
       setRefreshing(true)
-      const token = localStorage.getItem('codecircle_token')
-      console.log('🔄 Refreshing user data with token:', token ? 'exists' : 'none')
+      console.log('🔄 Refreshing user data')
       
-      const response = await fetch('http://localhost:5000/api/auth/profile', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await api.get('/auth/profile')
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to refresh profile')
-      }
-      
-      if (data.success) {
-        console.log('✅ Refreshed user data:', data.user)
-        // Update the user context with fresh data
-        updateUser(data.user)
+      if (response.data.success) {
+        console.log('✅ Refreshed user data:', response.data.user)
+        updateUser(response.data.user)
         toast.success('Profile updated successfully')
       }
     } catch (error) {
       console.error('Error refreshing user data:', error)
-      toast.error('Failed to refresh profile')
+      toast.error(error.response?.data?.message || 'Failed to refresh profile')
     } finally {
       setRefreshing(false)
     }
   }
 
-  // Format test schedule from user data - THIS WILL NOW SHOW RESCHEDULED TIME
+  // Format test schedule from user data
   const testSchedule = user?.testScheduled && user?.testDate
     ? { 
         date: user.testDate, 
@@ -61,7 +46,7 @@ const CandidateDashboard = () => {
       }
     : null
 
-  // Add this function to check if test is still available today
+  // Check if test is still available today
   const isTestAvailableToday = () => {
     if (!user?.testDate || !user?.testTime) return false
     
@@ -154,7 +139,7 @@ const CandidateDashboard = () => {
         console.error('Error parsing test date:', error)
       }
     }
-  }, [testSchedule]) // Re-run when testSchedule changes
+  }, [testSchedule])
 
   const formatTime = (seconds) => {
     if (!seconds) return '00:00:00'
@@ -164,7 +149,6 @@ const CandidateDashboard = () => {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  // Update your handleStartTest function
   const handleStartTest = () => {
     console.log('Start Test clicked - User:', user)
     
@@ -336,7 +320,7 @@ const CandidateDashboard = () => {
                 </div>
               </div>
 
-              {/* Countdown Timer - Shows accurate time from user data */}
+              {/* Countdown Timer */}
               {timeRemaining !== null && timeRemaining > 0 && (
                 <div className={`rounded-xl p-6 border ${
                   isTestApproaching() 
@@ -500,7 +484,7 @@ const CandidateDashboard = () => {
             </div>
           </div>
 
-          {/* Test Details - Shows accurate schedule */}
+          {/* Test Details */}
           <div className="card bg-gradient-to-br from-primary-50 to-primary-100 border-primary-200">
             <h3 className="font-semibold text-gray-900 mb-4">Test Details</h3>
             <div className="space-y-3">

@@ -1,6 +1,7 @@
 import { createContext, useState, useContext, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import axios from 'axios'
 
 const AuthContext = createContext()
 
@@ -46,84 +47,73 @@ export const AuthProvider = ({ children }) => {
     try {
       // Try admin login first
       console.log('Attempting admin login...')
-      const adminResponse = await fetch('http://localhost:5000/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      })
+      let adminResponse
+      try {
+        adminResponse = await axios.post('http://localhost:5000/api/admin/login', { email, password })
+        console.log('Admin login response status:', adminResponse.status)
+        console.log('Admin login response data:', adminResponse.data)
 
-      console.log('Admin login response status:', adminResponse.status)
-      const adminData = await adminResponse.json()
-      console.log('Admin login response data:', adminData)
-
-      // If admin login successful
-      if (adminResponse.ok && adminData.success) {
-        console.log('✅ Admin login successful!')
-        
-        const adminUser = {
-          id: adminData.user.id,
-          name: adminData.user.name,
-          email: adminData.user.email,
-          role: 'superadmin',
-          isAdmin: true,
-          ...adminData.user
+        // If admin login successful
+        if (adminResponse.status === 200 && adminResponse.data?.success) {
+          console.log('✅ Admin login successful!')
+          
+          const adminUser = {
+            id: adminResponse.data.user.id,
+            name: adminResponse.data.user.name,
+            email: adminResponse.data.user.email,
+            role: 'superadmin',
+            isAdmin: true,
+            ...adminResponse.data.user
+          }
+          
+          console.log('Setting admin user:', adminUser)
+          setUser(adminUser)
+          
+          console.log('Storing in localStorage...')
+          localStorage.setItem('codecircle_user', JSON.stringify(adminUser))
+          localStorage.setItem('codecircle_token', adminResponse.data.token)
+          
+          toast.success('Admin login successful')
+          navigate('/admin/dashboard', { replace: true })
+          return
         }
-        
-        console.log('Setting admin user:', adminUser)
-        setUser(adminUser)
-        
-        console.log('Storing in localStorage...')
-        localStorage.setItem('codecircle_user', JSON.stringify(adminUser))
-        localStorage.setItem('codecircle_token', adminData.token)
-        
-        console.log('Verifying localStorage after set:')
-        console.log('- stored user:', localStorage.getItem('codecircle_user'))
-        console.log('- stored token:', localStorage.getItem('codecircle_token') ? 'exists' : 'none')
-        
-        toast.success('Admin login successful')
-        console.log('Navigating to /admin/dashboard...')
-        navigate('/admin/dashboard', { replace: true })
-        return
+      } catch (adminError) {
+        // Admin login failed - this is expected for regular users
+        console.log('Admin login failed (expected for regular users):', adminError.response?.data?.message)
       }
 
-      console.log('Admin login failed, trying candidate login...')
-      
-      // If admin login fails, try candidate login
-      const userResponse = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      })
+      // If admin login fails or throws error, try candidate login
+      console.log('Trying candidate login...')
+      const userResponse = await axios.post('http://localhost:5000/api/auth/login', { email, password })
 
       console.log('Candidate login response status:', userResponse.status)
-      const userData = await userResponse.json()
-      console.log('Candidate login response data:', userData)
+      console.log('Candidate login response data:', userResponse.data)
 
-      if (!userResponse.ok || !userData.success) {
-        throw new Error(userData.message || 'Login failed')
+      if (userResponse.status === 200 && userResponse.data?.success) {
+        console.log('✅ Candidate login successful!')
+        
+        const candidateUser = {
+          ...userResponse.data.user,
+          isAdmin: false,
+          role: 'candidate'
+        }
+
+        console.log('Setting candidate user:', candidateUser)
+        setUser(candidateUser)
+        
+        localStorage.setItem('codecircle_user', JSON.stringify(candidateUser))
+        localStorage.setItem('codecircle_token', userResponse.data.token)
+        
+        toast.success('Login successful')
+        navigate('/candidate/dashboard', { replace: true })
+      } else {
+        throw new Error(userResponse.data?.message || 'Login failed')
       }
-
-      console.log('✅ Candidate login successful!')
-      
-      const candidateUser = {
-        ...userData.user,
-        isAdmin: false,
-        role: 'candidate'
-      }
-
-      console.log('Setting candidate user:', candidateUser)
-      setUser(candidateUser)
-      
-      localStorage.setItem('codecircle_user', JSON.stringify(candidateUser))
-      localStorage.setItem('codecircle_token', userData.token)
-      
-      toast.success('Login successful')
-      console.log('Navigating to /candidate/dashboard...')
-      navigate('/candidate/dashboard', { replace: true })
 
     } catch (error) {
       console.error('❌ Login error:', error)
-      toast.error(error.message || 'Login failed. Please check your credentials.')
+      console.error('Error response:', error.response?.data)
+      toast.error(error.response?.data?.message || error.message || 'Login failed. Please check your credentials.')
     } finally {
       setLoading(false)
       console.log('Login process complete, loading set to false')
@@ -135,28 +125,21 @@ export const AuthProvider = ({ children }) => {
     
     try {
       setLoading(true)
-      const response = await fetch('http://localhost:5000/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData)
-      })
+      const response = await axios.post('http://localhost:5000/api/auth/register', userData)
 
       console.log('Registration response status:', response.status)
-      const result = await response.json()
-      console.log('Registration response data:', result)
+      console.log('Registration response data:', response.data)
 
-      if (!response.ok) {
-        throw new Error(result.message || 'Registration failed')
-      }
-
-      if (result.success) {
+      if (response.status === 201 && response.data?.success) {
         toast.success('Registration successful! You can now login.')
         navigate('/login')
-        return result.user
+        return response.data.user
+      } else {
+        throw new Error(response.data?.message || 'Registration failed')
       }
     } catch (error) {
       console.error('Registration error:', error)
-      toast.error(error.message || 'Registration failed. Please try again.')
+      toast.error(error.response?.data?.message || error.message || 'Registration failed. Please try again.')
       throw error
     } finally {
       setLoading(false)
@@ -172,7 +155,6 @@ export const AuthProvider = ({ children }) => {
     navigate('/login', { replace: true })
   }
 
-  // ADD THIS FUNCTION - Update user in state and localStorage
   const updateUser = (updates) => {
     console.log('Updating user with:', updates)
     setUser(prev => {
@@ -190,7 +172,7 @@ export const AuthProvider = ({ children }) => {
       login, 
       register, 
       logout, 
-      updateUser, // ADD THIS LINE
+      updateUser,
       loading 
     }}>
       {children}

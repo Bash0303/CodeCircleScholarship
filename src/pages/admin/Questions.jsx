@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import api from '../../utils/axios'
 import { 
   FileText, Plus, Trash2, Edit, Save, X,
   ChevronDown, ChevronUp, Copy, CheckCircle,
@@ -27,7 +28,7 @@ const AdminQuestions = () => {
   const [expandedId, setExpandedId] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const [selectedQuestions, setSelectedQuestions] = useState([]) // For bulk selection
+  const [selectedQuestions, setSelectedQuestions] = useState([])
   const [showBulkActions, setShowBulkActions] = useState(false)
   const [stats, setStats] = useState({
     total: 0,
@@ -37,24 +38,10 @@ const AdminQuestions = () => {
 
   // COMPREHENSIVE CATEGORY LIST (Fallback)
   const DEFAULT_CATEGORIES = [
-    'Frontend',
-    'Backend', 
-    'JavaScript',
-    'Python',
-    'Database',
-    'UI/UX',
-    'Cyber Security',
-    'Data Analysis',
-    'IoT',
-    'General',
-    'HTML',
-    'CSS',
-    'React',
-    'Node.js',
-    'MongoDB',
-    'Programming Basics',
-    'Algorithms',
-    'System Design'
+    'Frontend', 'Backend', 'JavaScript', 'Python', 'Database',
+    'UI/UX', 'Cyber Security', 'Data Analysis', 'IoT', 'General',
+    'HTML', 'CSS', 'React', 'Node.js', 'MongoDB',
+    'Programming Basics', 'Algorithms', 'System Design'
   ]
 
   const [newQuestion, setNewQuestion] = useState({
@@ -72,33 +59,18 @@ const AdminQuestions = () => {
   const fetchQuestions = async () => {
     setLoading(true)
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(
-        `http://localhost:5000/api/admin/questions?page=${currentPage}&limit=10&category=${selectedCategory}&difficulty=${selectedDifficulty}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
+      const response = await api.get(
+        `/admin/questions?page=${currentPage}&limit=10&category=${selectedCategory}&difficulty=${selectedDifficulty}`
       )
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch questions')
-      }
-
-      if (result.success) {
-        setQuestions(result.questions)
-        setPagination(result.pagination)
+      if (response.data.success) {
+        setQuestions(response.data.questions)
+        setPagination(response.data.pagination)
         
-        // If API returns categories, use them; otherwise use DEFAULT_CATEGORIES
-        if (result.filters?.categories && result.filters.categories.length > 0) {
-          setAvailableCategories(result.filters.categories)
+        if (response.data.filters?.categories?.length > 0) {
+          setAvailableCategories(response.data.filters.categories)
         } else {
-          // Extract unique categories from questions as fallback
-          const uniqueCategories = [...new Set(result.questions.map(q => q.category).filter(Boolean))]
+          const uniqueCategories = [...new Set(response.data.questions.map(q => q.category).filter(Boolean))]
           if (uniqueCategories.length > 0) {
             setAvailableCategories(uniqueCategories)
           } else {
@@ -108,8 +80,7 @@ const AdminQuestions = () => {
       }
     } catch (error) {
       console.error('Error fetching questions:', error)
-      toast.error(error.message || 'Failed to load questions')
-      // Ensure categories still display even on error
+      toast.error(error.response?.data?.message || 'Failed to load questions')
       setAvailableCategories(DEFAULT_CATEGORIES)
     } finally {
       setLoading(false)
@@ -120,22 +91,10 @@ const AdminQuestions = () => {
   // Fetch stats
   const fetchStats = async () => {
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch('http://localhost:5000/api/admin/questions/stats', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await api.get('/admin/questions/stats')
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch stats')
-      }
-
-      if (result.success) {
-        setStats(result.stats)
+      if (response.data.success) {
+        setStats(response.data.stats)
       }
     } catch (error) {
       console.error('Error fetching stats:', error)
@@ -160,24 +119,10 @@ const AdminQuestions = () => {
 
     setLoading(true)
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch('http://localhost:5000/api/admin/questions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(newQuestion)
-      })
+      const response = await api.post('/admin/questions', newQuestion)
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to add question')
-      }
-
-      if (result.success) {
-        toast.success(result.message || 'Question added successfully!')
+      if (response.data.success) {
+        toast.success(response.data.message || 'Question added successfully!')
         setNewQuestion({
           question: '',
           options: { a: '', b: '', c: '', d: '' },
@@ -187,12 +132,12 @@ const AdminQuestions = () => {
           tags: []
         })
         setShowAddForm(false)
-        fetchQuestions() // Refresh the list
-        fetchStats() // Refresh stats
+        fetchQuestions()
+        fetchStats()
       }
     } catch (error) {
       console.error('Error adding question:', error)
-      toast.error(error.message || 'Failed to add question')
+      toast.error(error.response?.data?.message || 'Failed to add question')
     } finally {
       setLoading(false)
     }
@@ -221,24 +166,10 @@ const AdminQuestions = () => {
 
     setLoading(true)
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(`http://localhost:5000/api/admin/questions/${editingId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(newQuestion)
-      })
+      const response = await api.put(`/admin/questions/${editingId}`, newQuestion)
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to update question')
-      }
-
-      if (result.success) {
-        toast.success(result.message || 'Question updated successfully!')
+      if (response.data.success) {
+        toast.success(response.data.message || 'Question updated successfully!')
         setEditingId(null)
         setNewQuestion({
           question: '',
@@ -249,11 +180,11 @@ const AdminQuestions = () => {
           tags: []
         })
         setShowAddForm(false)
-        fetchQuestions() // Refresh the list
+        fetchQuestions()
       }
     } catch (error) {
       console.error('Error updating question:', error)
-      toast.error(error.message || 'Failed to update question')
+      toast.error(error.response?.data?.message || 'Failed to update question')
     } finally {
       setLoading(false)
     }
@@ -267,107 +198,72 @@ const AdminQuestions = () => {
 
     setLoading(true)
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch(`http://localhost:5000/api/admin/questions/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await api.delete(`/admin/questions/${id}`)
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to delete question')
-      }
-
-      if (result.success) {
-        toast.success(result.message || 'Question deleted successfully!')
-        // Remove from selected questions if selected
+      if (response.data.success) {
+        toast.success(response.data.message || 'Question deleted successfully!')
         setSelectedQuestions(prev => prev.filter(qId => qId !== id))
-        fetchQuestions() // Refresh the list
-        fetchStats() // Refresh stats
+        fetchQuestions()
+        fetchStats()
       }
     } catch (error) {
       console.error('Error deleting question:', error)
-      toast.error(error.message || 'Failed to delete question')
+      toast.error(error.response?.data?.message || 'Failed to delete question')
     } finally {
       setLoading(false)
     }
   }
 
   // Handle bulk upload
-  // Handle bulk upload - FIXED VERSION
-const handleBulkUpload = async (event) => {
-  const file = event.target.files?.[0]
-  if (!file) return
+  const handleBulkUpload = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
 
-  setUploading(true)
-  
-  try {
-    // Read the file content
-    const fileContent = await file.text()
+    setUploading(true)
     
-    // Parse the JSON content
-    let questionsData
     try {
-      questionsData = JSON.parse(fileContent)
-    } catch (parseError) {
-      toast.error('Invalid JSON file format')
+      const fileContent = await file.text()
+      let questionsData
+
+      try {
+        questionsData = JSON.parse(fileContent)
+      } catch (parseError) {
+        toast.error('Invalid JSON file format')
+        setUploading(false)
+        event.target.value = ''
+        return
+      }
+
+      let payload
+      if (Array.isArray(questionsData)) {
+        payload = { questions: questionsData }
+      } else if (questionsData.questions && Array.isArray(questionsData.questions)) {
+        payload = questionsData
+      } else {
+        toast.error('Invalid JSON structure. Expected an array of questions or { questions: [...] }')
+        setUploading(false)
+        event.target.value = ''
+        return
+      }
+
+      const response = await api.post('/admin/questions/bulk-upload', payload)
+
+      if (response.data.success) {
+        toast.success(response.data.message || `Successfully uploaded ${response.data.count} questions`)
+        fetchQuestions()
+        fetchStats()
+      }
+    } catch (error) {
+      console.error('Error uploading questions:', error)
+      toast.error(error.response?.data?.message || 'Failed to upload questions')
+    } finally {
       setUploading(false)
       event.target.value = ''
-      return
     }
-
-    // Ensure the data has the correct structure
-    // If the file contains a direct array, wrap it in { questions: [...] }
-    let payload
-    if (Array.isArray(questionsData)) {
-      // File contains a direct array of questions
-      payload = { questions: questionsData }
-    } else if (questionsData.questions && Array.isArray(questionsData.questions)) {
-      // File already has the correct { questions: [...] } structure
-      payload = questionsData
-    } else {
-      toast.error('Invalid JSON structure. Expected an array of questions or { questions: [...] }')
-      setUploading(false)
-      event.target.value = ''
-      return
-    }
-
-    const token = localStorage.getItem('codecircle_token')
-    const response = await fetch('http://localhost:5000/api/admin/questions/bulk-upload', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json' // Important: Send as JSON, not FormData
-      },
-      body: JSON.stringify(payload) // Send the wrapped payload
-    })
-
-    const result = await response.json()
-
-    if (!response.ok) {
-      throw new Error(result.message || 'Failed to upload questions')
-    }
-
-    if (result.success) {
-      toast.success(result.message || `Successfully uploaded ${result.count} questions`)
-      fetchQuestions() // Refresh the list
-      fetchStats() // Refresh stats
-    }
-  } catch (error) {
-    console.error('Error uploading questions:', error)
-    toast.error(error.message || 'Failed to upload questions')
-  } finally {
-    setUploading(false)
-    event.target.value = '' // Reset file input
   }
-}
+
   // Handle upload test set
   const handleUploadSet = async () => {
-    // Check if questions are selected
     if (selectedQuestions.length === 0) {
       toast.error('Please select at least one question to create a test set')
       return
@@ -375,34 +271,20 @@ const handleBulkUpload = async (event) => {
 
     setUploading(true)
     try {
-      const token = localStorage.getItem('codecircle_token')
-      const response = await fetch('http://localhost:5000/api/admin/questions/upload-set', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-          questionIds: selectedQuestions  // Send the selected question IDs
-        })
+      const response = await api.post('/admin/questions/upload-set', {
+        questionIds: selectedQuestions
       })
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to upload test set')
-      }
-
-      if (result.success) {
-        toast.success(result.message || `Test set created with ${result.data.count} questions`)
-        setSelectedQuestions([]) // Clear selection
+      if (response.data.success) {
+        toast.success(response.data.message || `Test set created with ${response.data.data.count} questions`)
+        setSelectedQuestions([])
         setShowBulkActions(false)
-        fetchQuestions() // Refresh the list
-        fetchStats() // Refresh stats
+        fetchQuestions()
+        fetchStats()
       }
     } catch (error) {
       console.error('Error uploading test set:', error)
-      toast.error(error.message || 'Failed to upload test set')
+      toast.error(error.response?.data?.message || 'Failed to upload test set')
     } finally {
       setUploading(false)
     }
@@ -438,7 +320,7 @@ const handleBulkUpload = async (event) => {
   // Handle page change
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage)
-    setSelectedQuestions([]) // Clear selection when changing page
+    setSelectedQuestions([])
     setShowBulkActions(false)
   }
 
@@ -466,7 +348,6 @@ const handleBulkUpload = async (event) => {
   // Fetch stats on component mount
   useEffect(() => {
     fetchStats()
-    // Ensure categories are available even if API fails
     if (availableCategories.length === 0) {
       setAvailableCategories(DEFAULT_CATEGORIES)
     }
@@ -696,7 +577,6 @@ const handleBulkUpload = async (event) => {
                   className="input-field"
                 >
                   <option value="">Select Category</option>
-                  {/* Use availableCategories, which now has fallback */}
                   {availableCategories.length > 0 ? (
                     availableCategories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>

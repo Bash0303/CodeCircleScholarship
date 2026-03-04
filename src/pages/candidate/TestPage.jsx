@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import api from '../../utils/axios'
 import { 
   Clock, AlertTriangle, ChevronLeft, ChevronRight, 
   CheckCircle, Shield, Send, AlertCircle, Loader,
@@ -9,7 +10,7 @@ import {
 import toast from 'react-hot-toast'
 
 const TestPage = () => {
-  const { user, updateUser } = useAuth() // REMOVED token from here
+  const { user, updateUser } = useAuth()
   const navigate = useNavigate()
   
   // Test state
@@ -26,23 +27,16 @@ const TestPage = () => {
   const [answerTimers, setAnswerTimers] = useState({})
   const [currentQuestionStartTime, setCurrentQuestionStartTime] = useState(Date.now())
 
-  // Helper function to get token
-  const getToken = () => localStorage.getItem('codecircle_token')
-
   // Add this effect to handle page refresh/close
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      // Warn user before leaving
       e.preventDefault();
       e.returnValue = '';
     };
 
     const handleUnload = async () => {
-      // If test is in progress and user closes tab, mark as abandoned
       if (testId && !isSubmitting) {
         try {
-          const token = getToken();
-          // Use sendBeacon for reliable delivery during page unload
           const data = JSON.stringify({ 
             testId, 
             reason: 'page-closed',
@@ -50,7 +44,7 @@ const TestPage = () => {
             timeLeft: timeLeft
           });
           
-          navigator.sendBeacon('http://localhost:5000/api/tests/abandon', 
+          navigator.sendBeacon(`${api.defaults.baseURL}/tests/abandon`, 
             new Blob([data], { type: 'application/json' })
           );
         } catch (error) {
@@ -132,10 +126,8 @@ const TestPage = () => {
       const now = new Date()
       const testDate = new Date(user.testDate)
       
-      // Check if it's the same day
       if (testDate.toDateString() !== now.toDateString()) return false
       
-      // Parse test time
       const timeStr = user.testTime
       let hours, minutes
       
@@ -157,7 +149,6 @@ const TestPage = () => {
         minutes = parseInt(m)
       }
       
-      // Set test end time to 11:59 PM of the test day
       const testEndTime = new Date(testDate)
       testEndTime.setHours(23, 59, 59, 999)
       
@@ -173,24 +164,20 @@ const TestPage = () => {
     const startTest = async () => {
       setLoading(true)
       try {
-        const token = getToken() // USE getToken() INSTEAD
-        console.log('🔑 Starting test with token:', token ? 'exists' : 'none')
+        console.log('🔑 Starting test...')
 
-        // First check if test is scheduled
         if (!user?.testScheduled) {
           toast.error('Your test has not been scheduled yet')
           navigate('/candidate/dashboard')
           return
         }
 
-        // Check if test has already been taken
         if (user?.hasTakenTest) {
           toast.error('You have already taken this test')
           navigate('/candidate/dashboard')
           return
         }
 
-        // Check if test time has arrived
         if (!isTestTimeArrived()) {
           const testDateTime = formatTestDateTime()
           toast.error(`Your test is scheduled for ${testDateTime}. Please wait until your scheduled time.`, {
@@ -201,7 +188,6 @@ const TestPage = () => {
           return
         }
 
-        // Check if test is still available today (before 11:59 PM)
         if (!isTestAvailableToday()) {
           toast.error('Test is no longer available for today. Please contact admin if you need to reschedule.', {
             duration: 5000,
@@ -211,41 +197,26 @@ const TestPage = () => {
           return
         }
 
-        // Get screen resolution for anti-cheating
         const screenResolution = `${window.screen.width}x${window.screen.height}`
         
-        const response = await fetch('http://localhost:5000/api/tests/start', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ screenResolution })
-        })
+        const response = await api.post('/tests/start', { screenResolution })
 
-        const result = await response.json()
-
-        if (!response.ok) {
-          throw new Error(result.message || 'Failed to start test')
-        }
-
-        if (result.success) {
-          setTestId(result.data.testId)
-          setQuestions(result.data.questions)
-          setTimeLeft(result.data.timeLimit)
-          setStartTime(result.data.startTime)
+        if (response.data.success) {
+          setTestId(response.data.data.testId)
+          setQuestions(response.data.data.questions)
+          setTimeLeft(response.data.data.timeLimit)
+          setStartTime(response.data.data.startTime)
           setCurrentQuestionStartTime(Date.now())
           
-          // If there are existing answers (from resumed test), set them
-          if (result.data.answers) {
-            setAnswers(result.data.answers)
+          if (response.data.data.answers) {
+            setAnswers(response.data.data.answers)
           }
           
           toast.success('Test started successfully! Good luck!')
         }
       } catch (error) {
         console.error('Error starting test:', error)
-        toast.error(error.message || 'Failed to start test')
+        toast.error(error.response?.data?.message || 'Failed to start test')
         navigate('/candidate/dashboard')
       } finally {
         setLoading(false)
@@ -253,7 +224,7 @@ const TestPage = () => {
     }
 
     startTest()
-  }, [navigate, user]) // REMOVED token from dependencies
+  }, [navigate, user])
 
   // Timer effect
   useEffect(() => {
@@ -274,19 +245,10 @@ const TestPage = () => {
       })
     }, 1000)
 
-    // Sync timer with server every 30 seconds
     const syncTimer = setInterval(async () => {
       try {
         if (testId) {
-          const token = getToken() // USE getToken() HERE
-          await fetch('http://localhost:5000/api/tests/timer', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ testId, timeLeft })
-          })
+          await api.post('/tests/timer', { testId, timeLeft })
         }
       } catch (error) {
         console.error('Failed to sync timer:', error)
@@ -305,34 +267,23 @@ const TestPage = () => {
       try {
         if (!testId) return
         
-        const token = getToken() // USE getToken() HERE
-        
-        const response = await fetch('http://localhost:5000/api/tests/cheat-log', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ 
-            testId, 
-            type, 
-            details 
-          })
+        const response = await api.post('/tests/cheat-log', { 
+          testId, 
+          type, 
+          details 
         })
 
-        const result = await response.json()
-
-        if (result.success) {
+        if (response.data.success) {
           setWarningCount(prev => prev + 1)
           
-          if (result.data.cheatingDetected) {
+          if (response.data.data.cheatingDetected) {
             toast.error('Cheating detected! Test will be auto-submitted.', {
               duration: 5000,
               icon: '🚫'
             })
             handleAutoSubmit()
           } else {
-            toast.error(result.data.warning || `Warning ${warningCount + 1}/3: ${details}`, {
+            toast.error(response.data.data.warning || `Warning ${warningCount + 1}/3: ${details}`, {
               duration: 3000,
               icon: '⚠️'
             })
@@ -361,7 +312,6 @@ const TestPage = () => {
     }
 
     const handleKeyDown = (e) => {
-      // Prevent Ctrl+C, Ctrl+V, Ctrl+P, Ctrl+S, Ctrl+U
       if (e.ctrlKey && ['c', 'v', 'p', 's', 'u'].includes(e.key.toLowerCase())) {
         e.preventDefault()
         if (testId) {
@@ -369,7 +319,6 @@ const TestPage = () => {
         }
       }
       
-      // Prevent F12, Ctrl+Shift+I, Ctrl+Shift+J (DevTools)
       if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I', 'J'].includes(e.key))) {
         e.preventDefault()
         if (testId) {
@@ -389,7 +338,7 @@ const TestPage = () => {
       document.removeEventListener('contextmenu', handleContextMenu)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [testId, warningCount]) // REMOVED token from dependencies
+  }, [testId, warningCount])
 
   const formatTime = (seconds) => {
     const minutes = Math.floor(seconds / 60)
@@ -398,50 +347,30 @@ const TestPage = () => {
   }
 
   const handleAnswerSelect = async (questionId, answer) => {
-    // Calculate time spent on this question
     const timeSpent = Math.floor((Date.now() - currentQuestionStartTime) / 1000)
     
-    // Save answer to state
     setAnswers(prev => ({
       ...prev,
       [questionId]: answer
     }))
 
-    // Save answer timers
     setAnswerTimers(prev => ({
       ...prev,
       [questionId]: timeSpent
     }))
 
-    // Send answer to server
     try {
-      const token = getToken() // USE getToken() HERE
-      
-      const response = await fetch('http://localhost:5000/api/tests/answer', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-          testId, 
-          questionId, 
-          answer,
-          timeSpent
-        })
+      await api.post('/tests/answer', { 
+        testId, 
+        questionId, 
+        answer,
+        timeSpent
       })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to save answer')
-      }
     } catch (error) {
       console.error('Error saving answer:', error)
       toast.error('Failed to save answer. Please try again.')
     }
 
-    // Reset timer for next question
     setCurrentQuestionStartTime(Date.now())
   }
 
@@ -465,31 +394,13 @@ const TestPage = () => {
     setIsSubmitting(true)
     
     try {
-      const token = getToken() // USE getToken() HERE
-      
-      const response = await fetch('http://localhost:5000/api/tests/auto-submit', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ testId })
-      })
+      const response = await api.post('/tests/auto-submit', { testId })
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        // If auto-submit fails, try manual submit
-        await handleSubmit(true)
-        return
-      }
-
-      if (result.success) {
-        // Update user context with test results
+      if (response.data.success) {
         updateUser({
           hasTakenTest: true,
-          testScore: result.data.score,
-          passed: result.data.passed,
+          testScore: response.data.data.score,
+          passed: response.data.data.passed,
           testStatus: 'completed'
         })
         
@@ -504,7 +415,6 @@ const TestPage = () => {
       }
     } catch (error) {
       console.error('Error auto-submitting test:', error)
-      // Fallback to manual submit
       await handleSubmit(true)
     } finally {
       setIsSubmitting(false)
@@ -521,41 +431,24 @@ const TestPage = () => {
     setIsSubmitting(true)
     
     try {
-      const token = getToken() // USE getToken() HERE
-      
-      // Calculate time spent on last question
       const lastQuestionTimeSpent = Math.floor((Date.now() - currentQuestionStartTime) / 1000)
       const finalAnswerTimers = {
         ...answerTimers,
         [questions[currentQuestion]?.id]: lastQuestionTimeSpent
       }
 
-      const response = await fetch('http://localhost:5000/api/tests/submit', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-          testId, 
-          answers,
-          timeLeft,
-          answerTimers: finalAnswerTimers
-        })
+      const response = await api.post('/tests/submit', { 
+        testId, 
+        answers,
+        timeLeft,
+        answerTimers: finalAnswerTimers
       })
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to submit test')
-      }
-
-      if (result.success) {
-        // Update user context with test results
+      if (response.data.success) {
         updateUser({
           hasTakenTest: true,
-          testScore: result.data.score,
-          passed: result.data.passed,
+          testScore: response.data.data.score,
+          passed: response.data.data.passed,
           testStatus: 'completed'
         })
 
@@ -572,12 +465,12 @@ const TestPage = () => {
 
         setTimeout(() => {
           if (!isAuto) {
-            toast(result.data.passed ? 
+            toast(response.data.data.passed ? 
               'Congratulations! You passed the test. Results will be communicated via email.' :
               'Thank you for taking the test. Results will be communicated via email.',
               {
                 duration: 6000,
-                icon: result.data.passed ? '🎉' : '📧'
+                icon: response.data.data.passed ? '🎉' : '📧'
               }
             )
           }
@@ -587,7 +480,7 @@ const TestPage = () => {
       }
     } catch (error) {
       console.error('Error submitting test:', error)
-      toast.error(error.message || 'Failed to submit test')
+      toast.error(error.response?.data?.message || 'Failed to submit test')
     } finally {
       setIsSubmitting(false)
     }
@@ -630,7 +523,7 @@ const TestPage = () => {
 
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Test Header - Shows test time info */}
+      {/* Test Header */}
       <div className="card bg-gradient-to-r from-primary-600 to-primary-800 text-white mb-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between">
           <div>
@@ -685,7 +578,6 @@ const TestPage = () => {
         </div>
       </div>
 
-      {/* Rest of your test page JSX remains the same - I'll keep the rest as is */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Questions Navigation */}
         <div className="lg:col-span-1">
