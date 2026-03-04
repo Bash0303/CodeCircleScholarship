@@ -519,14 +519,7 @@ const CandidateDashboard = () => {
                 </div>
               )}
               
-              {user?.testScore && (
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Score:</span>
-                  <span className={`font-semibold ${user.passed ? 'text-green-600' : 'text-red-600'}`}>
-                    {user.testScore}% {user.passed && '(Passed)'}
-                  </span>
-                </div>
-              )}
+              {/* Score section completely removed - no longer displayed */}
             </div>
           </div>
 
