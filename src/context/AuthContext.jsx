@@ -12,6 +12,9 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
+  // Get API URL from environment
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+
   // Initialize from localStorage
   useEffect(() => {
     const initializeAuth = () => {
@@ -49,7 +52,7 @@ export const AuthProvider = ({ children }) => {
       console.log('Attempting admin login...')
       let adminResponse
       try {
-        adminResponse = await axios.post('http://localhost:5000/api/admin/login', { email, password })
+        adminResponse = await axios.post(`${API_URL}/admin/login`, { email, password })
         console.log('Admin login response status:', adminResponse.status)
         console.log('Admin login response data:', adminResponse.data)
 
@@ -78,13 +81,12 @@ export const AuthProvider = ({ children }) => {
           return
         }
       } catch (adminError) {
-        // Admin login failed - this is expected for regular users
         console.log('Admin login failed (expected for regular users):', adminError.response?.data?.message)
       }
 
-      // If admin login fails or throws error, try candidate login
+      // Try candidate login
       console.log('Trying candidate login...')
-      const userResponse = await axios.post('http://localhost:5000/api/auth/login', { email, password })
+      const userResponse = await axios.post(`${API_URL}/auth/login`, { email, password })
 
       console.log('Candidate login response status:', userResponse.status)
       console.log('Candidate login response data:', userResponse.data)
@@ -125,7 +127,7 @@ export const AuthProvider = ({ children }) => {
     
     try {
       setLoading(true)
-      const response = await axios.post('http://localhost:5000/api/auth/register', userData)
+      const response = await axios.post(`${API_URL}/auth/register`, userData)
 
       console.log('Registration response status:', response.status)
       console.log('Registration response data:', response.data)

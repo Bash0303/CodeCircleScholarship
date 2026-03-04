@@ -11,7 +11,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // Add timeout to prevent hanging
+  timeout: 30000, // Increased from 10000 to 30000 (30 seconds)
 });
 
 // Request interceptor to add token
@@ -38,6 +38,12 @@ api.interceptors.response.use(
   },
   (error) => {
     console.error('❌ Response error:', error.config?.url, error.message);
+    
+    // Handle timeout errors specifically
+    if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
+      console.error('⏰ Request timeout - server took too long to respond');
+      // You can add custom timeout handling here if needed
+    }
     
     // Handle 401 errors
     if (error.response?.status === 401) {
