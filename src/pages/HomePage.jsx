@@ -1,10 +1,59 @@
+import { useState, useEffect } from 'react'
 import Header from '../components/common/Header'
 import Footer from '../components/common/Footer'
 import { Link } from 'react-router-dom'
 import { ArrowRight, CheckCircle, Clock, Users, Award, ChevronRight } from 'lucide-react'
 import logo from '../assets/logo.png'
+import api from '../utils/axios'
+import { useAuth } from '../context/AuthContext' // Add this import
 
 const HomePage = () => {
+  const { user } = useAuth(); // Get user to check if logged in
+  // ===== UPDATED: Registration status state with loading =====
+  const [registrationStatus, setRegistrationStatus] = useState({ 
+    enabled: true, 
+    message: '', 
+    openDate: null, 
+    closeDate: null,
+    loading: true
+  });
+
+  // ===== UPDATED: Check registration status only if user is logged in =====
+  useEffect(() => {
+    const checkRegistration = async () => {
+      // If user is logged in (especially admin), try to fetch real settings
+      if (user) {
+        try {
+          const response = await api.get('/admin/settings');
+          if (response.data.success) {
+            const general = response.data.settings.general;
+            setRegistrationStatus({
+              enabled: general.registrationEnabled,
+              message: general.registrationMessage,
+              openDate: general.registrationOpenDate,
+              closeDate: general.registrationCloseDate,
+              loading: false
+            });
+            return;
+          }
+        } catch (error) {
+          console.error('Error checking registration status:', error);
+        }
+      }
+      
+      // For non-logged in users or if API fails, assume registration is open
+      setRegistrationStatus({
+        enabled: true,
+        message: '',
+        openDate: null,
+        closeDate: null,
+        loading: false
+      });
+    };
+    
+    checkRegistration();
+  }, [user]); // Re-run when user changes
+
   const features = [
     {
       icon: <CheckCircle className="w-6 h-6" />,
@@ -96,6 +145,25 @@ const HomePage = () => {
                   <ChevronRight className="w-4 h-4 md:w-5 md:h-5" />
                 </Link>
               </div>
+
+              {/* ===== UPDATED: Registration Status Banner (only shows for logged in users when registration is closed) ===== */}
+              {!registrationStatus.loading && !registrationStatus.enabled && user && (
+                <div className="mt-4 mb-8 md:mb-12 p-4 bg-yellow-500/20 border border-yellow-400/30 rounded-lg backdrop-blur-sm max-w-2xl mx-auto">
+                  <p className="text-yellow-100 text-sm md:text-base">
+                    {registrationStatus.message || 'Registration is currently closed. Please check back later.'}
+                  </p>
+                  {registrationStatus.openDate && (
+                    <p className="text-yellow-100/80 text-xs md:text-sm mt-2">
+                      Scheduled to open: {new Date(registrationStatus.openDate).toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           

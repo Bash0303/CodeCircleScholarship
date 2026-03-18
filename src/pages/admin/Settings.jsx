@@ -26,6 +26,11 @@ const AdminSettings = () => {
       contactPhone: '',
       contactEmail: '',
       officeAddress: '',
+      // NEW REGISTRATION FIELDS
+      registrationEnabled: true,
+      registrationOpenDate: null,
+      registrationCloseDate: null,
+      registrationMessage: 'Registration is currently closed. Please check back later.',
       logo: null
     },
     test: {
@@ -115,48 +120,54 @@ const AdminSettings = () => {
   }
 
   // Save all settings
-  const handleSaveSettings = async () => {
-    setSaving(true)
-    try {
-      const response = await api.put('/admin/settings', settings)
-
-      if (response.data.success) {
-        setSettings(response.data.settings)
-        if (response.data.settings.metadata) {
-          setMetadata(response.data.settings.metadata)
-        }
-        toast.success(response.data.message || 'Settings saved successfully!')
-        fetchSettingsHistory()
+  // Save all settings - uses PUT
+const handleSaveSettings = async () => {
+  console.log('🔵 SAVE ALL CHANGES CLICKED');
+  console.log('🔵 Current settings state:', settings);
+  
+  setSaving(true)
+  try {
+    const response = await api.put('/admin/settings', settings)
+    
+    if (response.data.success) {
+      console.log('✅ Settings saved successfully:', response.data.settings);
+      setSettings(response.data.settings)
+      if (response.data.settings.metadata) {
+        setMetadata(response.data.settings.metadata)
       }
-    } catch (error) {
-      console.error('Error saving settings:', error)
-      toast.error(error.response?.data?.message || 'Failed to save settings')
-    } finally {
-      setSaving(false)
+      toast.success(response.data.message || 'Settings saved successfully!')
+      fetchSettingsHistory()
     }
+  } catch (error) {
+    console.error('❌ Error saving settings:', error)
+    toast.error(error.response?.data?.message || 'Failed to save settings')
+  } finally {
+    setSaving(false)
   }
+}
 
-  // Save specific section
-  const saveSection = async (section) => {
-    setSaving(true)
-    try {
-      const response = await api.put(`/admin/settings/${section}`, settings[section])
+// Save specific section - uses PATCH
+const saveSection = async (section) => {
+  setSaving(true)
+  try {
+    console.log(`🔵 Saving section: ${section}`, settings[section])
+    const response = await api.patch(`/admin/settings/${section}`, settings[section])
 
-      if (response.data.success) {
-        setSettings(prev => ({
-          ...prev,
-          [section]: response.data.section
-        }))
-        toast.success(response.data.message || `${section} settings saved successfully!`)
-        fetchSettingsHistory()
-      }
-    } catch (error) {
-      console.error(`Error saving ${section} settings:`, error)
-      toast.error(error.response?.data?.message || `Failed to save ${section} settings`)
-    } finally {
-      setSaving(false)
+    if (response.data.success) {
+      setSettings(prev => ({
+        ...prev,
+        [section]: response.data.section
+      }))
+      toast.success(response.data.message || `${section} settings saved successfully!`)
+      fetchSettingsHistory()
     }
+  } catch (error) {
+    console.error(`Error saving ${section} settings:`, error)
+    toast.error(error.response?.data?.message || `Failed to save ${section} settings`)
+  } finally {
+    setSaving(false)
   }
+}
 
   // Reset settings to default
   const handleResetSettings = async () => {
@@ -218,6 +229,13 @@ const AdminSettings = () => {
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A'
     return new Date(dateString).toLocaleString()
+  }
+
+  // Format date for datetime-local input
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toISOString().slice(0, 16);
   }
 
   // Load settings on mount
@@ -454,6 +472,109 @@ const AdminSettings = () => {
                         className="input-field"
                       />
                     </div>
+
+                    {/* ===== NEW REGISTRATION CONTROL SECTION ===== */}
+                    <div className="mt-8 pt-6 border-t border-gray-200">
+                      <h3 className="text-lg font-medium text-gray-900 mb-4">Registration Control</h3>
+                      
+                      {/* Enable/Disable Registration */}
+                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl mb-4">
+                        <div>
+                          <label className="font-medium text-gray-900">Enable Registration</label>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Allow new users to register for the scholarship
+                          </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.general.registrationEnabled}
+                            onChange={(e) => handleChange('general', 'registrationEnabled', e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                        </label>
+                      </div>
+
+                      {/* Open Date */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Registration Open Date
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={formatDateForInput(settings.general.registrationOpenDate)}
+                            onChange={(e) => handleChange('general', 'registrationOpenDate', e.target.value ? new Date(e.target.value) : null)}
+                            className="input-field"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Leave empty for no open date restriction</p>
+                        </div>
+
+                        {/* Close Date */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Registration Close Date
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={formatDateForInput(settings.general.registrationCloseDate)}
+                            onChange={(e) => handleChange('general', 'registrationCloseDate', e.target.value ? new Date(e.target.value) : null)}
+                            className="input-field"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Leave empty for no close date restriction</p>
+                        </div>
+                      </div>
+
+                      {/* Custom Message */}
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Registration Closed Message
+                        </label>
+                        <textarea
+                          value={settings.general.registrationMessage}
+                          onChange={(e) => handleChange('general', 'registrationMessage', e.target.value)}
+                          rows="2"
+                          className="input-field"
+                          placeholder="Message to show when registration is closed"
+                        />
+                      </div>
+
+                      {/* Preview Card */}
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                        <h4 className="font-medium text-blue-800 mb-2">Registration Status Preview</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center">
+                            <span className="text-blue-700 w-24">Status:</span>
+                            <span className={`font-semibold ${settings.general.registrationEnabled ? 'text-green-600' : 'text-red-600'}`}>
+                              {settings.general.registrationEnabled ? 'Open' : 'Closed'}
+                            </span>
+                          </div>
+                          {settings.general.registrationOpenDate && (
+                            <div className="flex items-center">
+                              <span className="text-blue-700 w-24">Opens:</span>
+                              <span className="text-gray-700">
+                                {new Date(settings.general.registrationOpenDate).toLocaleString()}
+                              </span>
+                            </div>
+                          )}
+                          {settings.general.registrationCloseDate && (
+                            <div className="flex items-center">
+                              <span className="text-blue-700 w-24">Closes:</span>
+                              <span className="text-gray-700">
+                                {new Date(settings.general.registrationCloseDate).toLocaleString()}
+                              </span>
+                            </div>
+                          )}
+                          {!settings.general.registrationEnabled && (
+                            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                              <p className="text-yellow-800 text-xs">{settings.general.registrationMessage}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {/* ===== END OF NEW SECTION ===== */}
                   </div>
                 </div>
               )}

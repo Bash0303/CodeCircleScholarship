@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { yupResolver } from '@hookform/resolvers/yup'
@@ -7,10 +7,11 @@ import toast from 'react-hot-toast'
 import Header from '../components/common/Header'
 import Footer from '../components/common/Footer'
 import api from '../utils/axios'
-import { Eye, EyeOff, Check, User, Mail, Phone, MapPin, Lock, ArrowLeft, Shield } from 'lucide-react'
+import { Eye, EyeOff, Check, User, Mail, Phone, MapPin, Lock, ArrowLeft, Shield, AlertCircle } from 'lucide-react'
 import { COURSES } from '../data/courses'
 import { NIGERIAN_STATES } from '../data/states'
 import logo from '../assets/logo.png'
+import { useAuth } from '../context/AuthContext' // Add this import
 
 const schema = yup.object({
   fullName: yup.string().required('Full name is required').min(3, 'Name must be at least 3 characters'),
@@ -35,9 +36,17 @@ const schema = yup.object({
 })
 
 const RegisterPage = () => {
+  const { user } = useAuth(); // Get user to check if logged in
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [registrationStatus, setRegistrationStatus] = useState({ 
+    enabled: true, 
+    message: '', 
+    openDate: null, 
+    closeDate: null,
+    loading: true
+  });
   const navigate = useNavigate()
 
   const { register, handleSubmit, formState: { errors } } = useForm({
@@ -47,14 +56,72 @@ const RegisterPage = () => {
     }
   })
 
+  // UPDATED: Check registration status only if user is logged in
+  useEffect(() => {
+    const checkRegistration = async () => {
+      // If user is logged in (especially admin), try to fetch real settings
+      if (user) {
+        try {
+          const response = await api.get('/admin/settings');
+          if (response.data.success) {
+            const general = response.data.settings.general;
+            setRegistrationStatus({
+              enabled: general.registrationEnabled,
+              message: general.registrationMessage,
+              openDate: general.registrationOpenDate,
+              closeDate: general.registrationCloseDate,
+              loading: false
+            });
+            return;
+          }
+        } catch (error) {
+          console.error('Error checking registration status:', error);
+        }
+      }
+      
+      // For non-logged in users or if API fails, assume registration is open
+      setRegistrationStatus({
+        enabled: true,
+        message: '',
+        openDate: null,
+        closeDate: null,
+        loading: false
+      });
+    };
+    
+    checkRegistration();
+  }, [user]); // Re-run when user changes
+
   const onSubmit = async (data) => {
+    // Check registration status before submitting (for all users)
+    if (!registrationStatus.enabled) {
+      toast.error(registrationStatus.message || 'Registration is currently closed');
+      return;
+    }
+
+    if (registrationStatus.openDate) {
+      const now = new Date();
+      const openDate = new Date(registrationStatus.openDate);
+      if (now < openDate) {
+        toast.error(`Registration opens on ${openDate.toLocaleDateString()}`);
+        return;
+      }
+    }
+
+    if (registrationStatus.closeDate) {
+      const now = new Date();
+      const closeDate = new Date(registrationStatus.closeDate);
+      if (now > closeDate) {
+        toast.error(`Registration closed on ${closeDate.toLocaleDateString()}`);
+        return;
+      }
+    }
+
     setIsSubmitting(true)
     
     try {
-      // Call your backend API using axios
       const response = await api.post('/auth/register', data)
       
-      // Log the full response for debugging (optional)
       console.log('Registration response:', response)
 
       const result = response.data
@@ -62,13 +129,11 @@ const RegisterPage = () => {
       if (result.success) {
         toast.success(result.message || 'Registration successful!')
         
-        // Store token if your API returns one
         if (result.token) {
           localStorage.setItem('codecircle_token', result.token)
           localStorage.setItem('codecircle_user', JSON.stringify(result.user))
         }
         
-        // Navigate to registration success page
         navigate('/registration-success')
       } else {
         throw new Error(result.message || 'Registration failed')
@@ -76,7 +141,6 @@ const RegisterPage = () => {
     } catch (error) {
       console.error('Registration error:', error)
       
-      // Better error handling with axios
       const errorMessage = error.response?.data?.message || 
                           error.message || 
                           'Registration failed. Please try again.'
@@ -84,6 +148,26 @@ const RegisterPage = () => {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // Show loading state (brief)
+  if (registrationStatus.loading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-grow py-8 md:py-12">
+          <div className="container-responsive">
+            <div className="max-w-4xl mx-auto text-center">
+              <div className="card p-12">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mb-4"></div>
+                <p className="text-gray-600">Loading...</p>
+              </div>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    )
   }
 
   return (
@@ -117,6 +201,29 @@ const RegisterPage = () => {
                 Fill in your details to apply for the CodeCircle TechHub Scholarship
               </p>
             </div>
+
+            {/* Registration Status Banner - Only shows for logged in users when registration is closed */}
+            {user && !registrationStatus.enabled && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                <div className="flex items-start">
+                  <AlertCircle className="w-5 h-5 text-yellow-600 mr-3 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-yellow-800">Registration Currently Closed</p>
+                    <p className="text-sm text-yellow-700 mt-1">{registrationStatus.message}</p>
+                    {registrationStatus.openDate && (
+                      <p className="text-xs text-yellow-600 mt-2">
+                        Opens: {new Date(registrationStatus.openDate).toLocaleDateString('en-US', { 
+                          weekday: 'long', 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Main Form */}
@@ -346,7 +453,7 @@ const RegisterPage = () => {
                       <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="w-full btn-primary flex items-center justify-center space-x-2 py-4"
+                        className={`w-full btn-primary flex items-center justify-center space-x-2 py-4`}
                       >
                         {isSubmitting ? (
                           <>
