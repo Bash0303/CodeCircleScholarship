@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { Home, LogIn, Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import logo from '../../assets/logo.png' // Correct path
+
 const Header = () => {
   const location = useLocation()
   const isHomePage = location.pathname === '/'
@@ -20,9 +21,12 @@ const Header = () => {
                 className="w-full h-full object-contain"
               />
             </div>
-            <div className="hidden sm:block">
-              <span className="font-bold text-xl text-gray-900">CodeCircle</span>
-              <span className="block text-xs text-primary-600 font-medium">
+            {/* FIXED: Removed hidden sm:block to show on mobile */}
+            <div className="flex flex-col">
+              <span className="font-bold text-gray-900 text-sm sm:text-base md:text-xl leading-tight">
+                CodeCircle
+              </span>
+              <span className="text-xs text-primary-600 font-medium leading-tight">
                 TechHub Scholarship
               </span>
             </div>
