@@ -148,7 +148,7 @@ const TestInstructions = () => {
               </div>
               <div className="flex justify-between items-center pb-3 border-b border-gray-200">
                 <span className="text-gray-600">Questions</span>
-                <span className="font-semibold">20 questions</span>
+                <span className="font-semibold">40 questions</span>
               </div>
               <div className="flex justify-between items-center pb-3 border-b border-gray-200">
                 <span className="text-gray-600">Passing Score</span>
