@@ -7,7 +7,7 @@ const RegistrationSuccess = () => {
   const navigate = useNavigate()
   const [countdown, setCountdown] = useState(20)
   
-  const whatsappLink = "https://chat.whatsapp.com/FMb4RGByAdTFcBfw6eeGZe?mode=hqctcli"
+  const whatsappLink = "https://chat.whatsapp.com/FEhs852KR03LrsY6XGjnMf?mode=gi_t"
 
   useEffect(() => {
     const timer = setInterval(() => {
